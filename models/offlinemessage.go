@@ -60,7 +60,7 @@ func (p *userMessageProcessor) Send(user *User) {
 
 	// if user is offline
 	// there's no need to send the @ message to it
-	if user.IsNew {
+	if !user.IsOnline {
 		return
 	}
 

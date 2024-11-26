@@ -20,10 +20,11 @@ type broadcastOp struct {
 }
 
 const (
-	OpLogin   = "login"
-	OpLogout  = "logout"
-	OpCheck   = "check"
-	OpGetList = "getList"
+	OpLogin       = "login"
+	OpLogout      = "logout"
+	OpCheckLogin  = "checklogin"
+	OpCheckLogout = "checklogout"
+	OpGetList     = "getList"
 )
 
 var Broadcaster = &broadcast{
@@ -53,9 +54,13 @@ func (b *broadcast) Start() {
 				op.user.CloseChannel()
 				b.Broadcast(NewLogoutMsg(op.user))
 
-			case OpCheck:
+			case OpCheckLogin:
 				_, exists := b.users[op.user.Name]
 				op.reply <- !exists
+
+			case OpCheckLogout:
+				_, exists := b.users[op.user.Name]
+				op.reply <- exists
 
 			case OpGetList:
 				usersList := make([]*User, 0, len(b.users))
@@ -68,7 +73,7 @@ func (b *broadcast) Start() {
 		case msg := <-b.messageChannel:
 			for _, user := range b.users {
 				log.Println(user.Name)
-				if user.ID == msg.User.ID {
+				if user.ID == msg.User.ID && msg.Type != MsgTypeNormal {
 					continue
 				}
 				user.MessageChannel <- msg
@@ -86,9 +91,17 @@ func (b *broadcast) UserLogout(user *User) {
 	b.ops <- broadcastOp{typ: OpLogout, user: user}
 }
 
+// we use channel to ensure concurrent safety
 func (b *broadcast) CheckUserCanLogin(name string) bool {
 	reply := make(chan interface{})
-	b.ops <- broadcastOp{typ: OpCheck, user: &User{Name: name}, reply: reply}
+	b.ops <- broadcastOp{typ: OpCheckLogin, user: &User{Name: name}, reply: reply}
+	boolReply, _ := (<-reply).(bool)
+	return boolReply
+}
+
+func (b *broadcast) CheckUserCanLogout(name string) bool {
+	reply := make(chan interface{})
+	b.ops <- broadcastOp{typ: OpCheckLogout, user: &User{Name: name}, reply: reply}
 	boolReply, _ := (<-reply).(bool)
 	return boolReply
 }

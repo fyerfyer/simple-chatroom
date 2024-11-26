@@ -23,8 +23,8 @@ type User struct {
 	Addr           string        `json:"address"`
 	MessageChannel chan *Message `json:"-"`
 
-	conn  *websocket.Conn `json:"-"`
-	IsNew bool            `json:"-"`
+	conn     *websocket.Conn `json:"-"`
+	IsOnline bool            `json:"-"`
 }
 
 func NewUser(conn *websocket.Conn, name, addr string) *User {
@@ -39,7 +39,6 @@ func NewUser(conn *websocket.Conn, name, addr string) *User {
 	if user.ID == 0 {
 		// set user id if it haven't been set
 		user.ID = int(atomic.AddUint32(&globalUserID, 1))
-		user.IsNew = true
 	}
 
 	return user
@@ -56,7 +55,7 @@ func (u *User) CloseChannel() {
 }
 
 func (u *User) FetchMessage(c *gin.Context) error {
-	var msg map[string]string
+	var msg map[string]interface{}
 
 	for {
 		err := wsjson.Read(c, u.conn, &msg)
@@ -73,7 +72,7 @@ func (u *User) FetchMessage(c *gin.Context) error {
 		}
 
 		// send the message to the chatroom
-		sendMsg := NewMessage(u, MsgTypeNormal, msg["content"], msg["sented_at"])
+		sendMsg := NewMessage(u, MsgTypeNormal, msg["content"].(string), msg["sent_at"].(time.Time))
 		reg := regexp.MustCompile(`@[^\s@]{2,20}`)
 		sendMsg.Ats = reg.FindAllString(sendMsg.Content, -1)
 

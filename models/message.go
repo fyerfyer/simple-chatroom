@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/spf13/cast"
 )
 
 const (
@@ -23,11 +21,11 @@ type Message struct {
 	Content string `json:"content"`
 
 	CreatedAt time.Time `json:"created_at"`
-	SendedAt  time.Time `json:"sended_at"`
+	SentAt    time.Time `json:"sent_at"`
 	Ats       []string  `json:"ats"`
 }
 
-func NewMessage(user *User, msgType int, content string, sendedAt string) *Message {
+func NewMessage(user *User, msgType int, content string, sentAt time.Time) *Message {
 	msg := &Message{
 		User:      user,
 		Type:      msgType,
@@ -35,8 +33,8 @@ func NewMessage(user *User, msgType int, content string, sendedAt string) *Messa
 		CreatedAt: time.Now(),
 	}
 
-	if sendedAt != "" {
-		msg.SendedAt = time.Unix(0, cast.ToInt64(sendedAt))
+	if !sentAt.IsZero() {
+		msg.SentAt = sentAt
 	}
 
 	return msg
@@ -46,28 +44,28 @@ func NewWelcomeMsg(user *User) *Message {
 	return NewMessage(user,
 		MsgTypeWelcome,
 		fmt.Sprintf("hello: %s ,welcome to the chatroom!", user.Name),
-		"")
+		time.Now())
 }
 
 func NewLoginMsg(user *User) *Message {
 	return NewMessage(user,
 		MsgTypeUserLogin,
 		fmt.Sprintf("%s has entered the chatroom!", user.Name),
-		"")
+		time.Now())
 }
 
 func NewLogoutMsg(user *User) *Message {
 	return NewMessage(user,
 		MsgTypeUserLogout,
 		fmt.Sprintf("%s has exited the chatroom!", user.Name),
-		"")
+		time.Now())
 }
 
 func NewErrorMsg(content string) *Message {
 	return NewMessage(System,
 		MsgTypeError,
 		content,
-		"")
+		time.Now())
 }
 
 func NewUserListMessage(users []*User) *Message {
@@ -81,5 +79,5 @@ func NewUserListMessage(users []*User) *Message {
 	return NewMessage(System,
 		MsgTypeUserList,
 		content,
-		"")
+		time.Now())
 }

@@ -3,6 +3,7 @@ package modelstest
 import (
 	"log"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 func init() {
 	go models.StartTest()
+	time.Sleep(50 * time.Millisecond)
 }
 
 func hasUser(users []*models.User, user *models.User) bool {
@@ -25,7 +27,6 @@ func hasUser(users []*models.User, user *models.User) bool {
 
 func TestBroadcastUserLogin(t *testing.T) {
 	defer models.ClearUserListForTesting()
-	time.Sleep(50 * time.Millisecond)
 
 	user := &models.User{
 		Name: "testing_user1",
@@ -41,7 +42,6 @@ func TestBroadcastUserLogin(t *testing.T) {
 
 func TestBroadcateUserLogout(t *testing.T) {
 	defer models.ClearUserListForTesting()
-	time.Sleep(50 * time.Millisecond)
 
 	user := &models.User{
 		Name:           "testing_user2",
@@ -57,7 +57,6 @@ func TestBroadcateUserLogout(t *testing.T) {
 
 func TestCheckUserCanLogin(t *testing.T) {
 	defer models.ClearUserListForTesting()
-	time.Sleep(50 * time.Millisecond)
 
 	user := &models.User{
 		Name: "testing_user3",
@@ -76,7 +75,6 @@ func TestCheckUserCanLogin(t *testing.T) {
 
 func TestGetUserList(t *testing.T) {
 	defer models.ClearUserListForTesting()
-	time.Sleep(50 * time.Millisecond)
 
 	var users []*models.User
 	for i := 0; i < 4; i++ {
@@ -101,7 +99,6 @@ func TestGetUserList(t *testing.T) {
 }
 
 func TestBroadcastMessage(t *testing.T) {
-	time.Sleep(50 * time.Millisecond)
 	defer models.ClearUserListForTesting()
 
 	var users []*models.User
@@ -130,7 +127,6 @@ func TestBroadcastMessage(t *testing.T) {
 }
 
 func TestLoginBroadcast(t *testing.T) {
-	time.Sleep(50 * time.Millisecond)
 	defer models.ClearUserListForTesting()
 
 	var users []*models.User
@@ -170,7 +166,6 @@ func TestLoginBroadcast(t *testing.T) {
 }
 
 func TestLogoutBroadcast(t *testing.T) {
-	time.Sleep(50 * time.Millisecond)
 	defer models.ClearUserListForTesting()
 
 	var users []*models.User
@@ -200,5 +195,71 @@ func TestLogoutBroadcast(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestLoginConcurrency(t *testing.T) {
+	defer models.ClearUserListForTesting()
+	var wg sync.WaitGroup
+	var boolCheck = make(map[bool]int)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			user := &models.User{
+				Name:           name,
+				MessageChannel: make(chan *models.Message, 32),
+			}
+
+			var boolValue bool
+			if boolValue = models.TestBroadcaster.CheckUserCanLogin(name); boolValue {
+				models.TestBroadcaster.UserLogin(user)
+				t.Log("successfully log in!")
+			}
+
+			boolCheck[boolValue]++
+		}("testing_user0")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	if boolCheck[true] == 0 {
+		t.Error("there should be at least one user successfully login")
+	}
+
+	if boolCheck[true] > 1 {
+		t.Error("there should not be more than one user successfully login")
+	}
+}
+
+func TestLogoutConcurrency(t *testing.T) {
+	defer models.ClearUserListForTesting()
+	var wg sync.WaitGroup
+	var boolCheck = make(map[bool]int)
+	models.LoginUserWithoutSendingMessage(&models.User{Name: "testing_user0", MessageChannel: make(chan *models.Message)})
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			var boolValue bool
+			if boolValue = models.TestBroadcaster.CheckUserCanLogout(name); boolValue {
+				models.TestBroadcaster.UserLogout(&models.User{Name: name, MessageChannel: make(chan *models.Message)})
+				t.Log("successfully log out!")
+			}
+
+			boolCheck[boolValue]++
+		}("testing_user0")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	if boolCheck[true] == 0 {
+		t.Error("there should be at least one user successfully logout")
+	}
+
+	if boolCheck[true] > 1 {
+		t.Error("there should not be more than one user successfully logout")
 	}
 }
