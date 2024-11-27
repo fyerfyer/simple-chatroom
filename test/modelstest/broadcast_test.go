@@ -152,11 +152,13 @@ func TestLoginBroadcast(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		if len(users[i].MessageChannel) == 0 {
 			t.Errorf("user%v should have received a message", i)
+			return
 		} else {
 			for len(users[i].MessageChannel) > 0 {
 				msg := <-users[i].MessageChannel
 				if msg.Type != models.MsgTypeUserLogin {
 					t.Error("the type of login message should be UserLogin")
+					return
 				} else {
 					t.Log(msg)
 				}
@@ -185,11 +187,13 @@ func TestLogoutBroadcast(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		if len(users[i].MessageChannel) == 0 {
 			t.Errorf("user%v should have received a message", i)
+			return
 		} else {
 			for len(users[i].MessageChannel) > 0 {
 				msg := <-users[i].MessageChannel
 				if msg.Type != models.MsgTypeUserLogout {
 					t.Error("the type of logout message should be UserLogout")
+					return
 				} else {
 					t.Log(msg)
 				}
@@ -202,8 +206,9 @@ func TestLoginConcurrency(t *testing.T) {
 	defer models.ClearUserListForTesting()
 	var wg sync.WaitGroup
 	var boolCheck = make(map[bool]int)
+
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
 			user := &models.User{
@@ -221,14 +226,16 @@ func TestLoginConcurrency(t *testing.T) {
 		}("testing_user0")
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	wg.Wait()
 
 	if boolCheck[true] == 0 {
 		t.Error("there should be at least one user successfully login")
+		return
 	}
 
 	if boolCheck[true] > 1 {
 		t.Error("there should not be more than one user successfully login")
+		return
 	}
 }
 
@@ -238,8 +245,8 @@ func TestLogoutConcurrency(t *testing.T) {
 	var boolCheck = make(map[bool]int)
 	models.LoginUserWithoutSendingMessage(&models.User{Name: "testing_user0", MessageChannel: make(chan *models.Message)})
 
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
 
@@ -253,13 +260,15 @@ func TestLogoutConcurrency(t *testing.T) {
 		}("testing_user0")
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	wg.Wait()
 
 	if boolCheck[true] == 0 {
 		t.Error("there should be at least one user successfully logout")
+		return
 	}
 
 	if boolCheck[true] > 1 {
 		t.Error("there should not be more than one user successfully logout")
+		return
 	}
 }
