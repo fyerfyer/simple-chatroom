@@ -52,6 +52,7 @@ func (b *broadcast) Start() {
 			case OpLogout:
 				delete(b.users, op.user.Name)
 				op.user.CloseChannel()
+				op.user.IsOnline = false
 				b.Broadcast(NewLogoutMsg(op.user))
 
 			case OpCheckLogin:
@@ -72,10 +73,12 @@ func (b *broadcast) Start() {
 
 		case msg := <-b.messageChannel:
 			for _, user := range b.users {
-				log.Println(user.Name)
+				// log.Println(user.Name)
 				if user.ID == msg.User.ID && msg.Type != MsgTypeNormal {
 					continue
 				}
+				// log.Println("sending msg to user channel!")
+				// log.Printf("msg to channel:%v", msg)
 				user.MessageChannel <- msg
 			}
 			UserMessageProcessor.Save(msg)
@@ -115,8 +118,9 @@ func (b *broadcast) GetUserList() []*User {
 
 func (b *broadcast) Broadcast(msg *Message) {
 	if len(b.messageChannel) >= setting.MessageQueueLength {
-		log.Println("the broadcast queue has been full!")
+		log.Println("the broadcast queue has been full")
 	} else {
+		// log.Println("broadcast successfully!")
 		b.messageChannel <- msg
 	}
 }
@@ -134,5 +138,17 @@ func ClearUserListForTesting() {
 }
 
 func LoginUserWithoutSendingMessage(user *User) {
+	// log.Printf("Loginuser:%v", user.Name)
 	TestBroadcaster.users[user.Name] = user
+}
+
+func GetMessageChannelLengthForTesting() int {
+	return len(TestBroadcaster.messageChannel)
+}
+
+func GetMessageInChannelForTesting() *Message {
+	if GetMessageChannelLengthForTesting() == 0 {
+		return nil
+	}
+	return <-TestBroadcaster.messageChannel
 }
