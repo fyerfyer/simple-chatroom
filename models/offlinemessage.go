@@ -16,6 +16,8 @@ type userMessageProcessor struct {
 
 var UserMessageProcessor = newUserMessageProcessor()
 
+var TestUserMessageProcessor = newUserMessageProcessor()
+
 func newUserMessageProcessor() *userMessageProcessor {
 	return &userMessageProcessor{
 		maxMsgNum:      setting.OfflineMsgNum,
@@ -54,7 +56,8 @@ func (p *userMessageProcessor) Send(user *User) {
 	// send the recent message to the user
 	for msg := p.recentMsgDeque.Front(); msg != nil; msg = msg.Next() {
 		if msg.Value != nil {
-			user.MessageChannel <- msg.Value.(*Message)
+			msgValue, _ := msg.Value.(*Message)
+			user.MessageChannel <- msgValue
 		}
 	}
 
@@ -67,9 +70,23 @@ func (p *userMessageProcessor) Send(user *User) {
 	userMsg, ok := p.userMsgDeque[user.Name]
 	if ok {
 		for msg := userMsg.Front(); msg != nil; msg = msg.Next() {
-			user.MessageChannel <- msg.Value.(*Message)
+			msgValue, _ := msg.Value.(*Message)
+			user.MessageChannel <- msgValue
 		}
 
 		delete(p.userMsgDeque, user.Name)
 	}
+}
+
+func GetRecentMsgQueueForTesting() *list.List {
+	return TestUserMessageProcessor.recentMsgDeque
+}
+
+func GetUserMsgQueueForTesting() map[string]*list.List {
+	return TestUserMessageProcessor.userMsgDeque
+}
+
+func ClearUserMsgProcessorForTesting() {
+	TestUserMessageProcessor.recentMsgDeque = list.New()
+	TestUserMessageProcessor.userMsgDeque = make(map[string]*list.List)
 }

@@ -3,7 +3,7 @@ package models
 import (
 	"errors"
 	"io"
-	"log"
+	// "log"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -47,9 +47,9 @@ func NewUser(conn *websocket.Conn, name, addr string) *User {
 }
 
 func (u *User) SendMessage(c *gin.Context) {
-	log.Println("start sending message...")
+	// log.Println("start sending message...")
 	for msg := range u.MessageChannel {
-		log.Printf("sending message:%v", msg)
+		// log.Printf("sending message:%v", msg)
 		wsjson.Write(c, u.conn, msg)
 	}
 }
@@ -113,7 +113,7 @@ func (u *User) FetchMessageForTesting(c *gin.Context) error {
 		// send the message to the chatroom
 		sendMsg := NewMessage(u, MsgTypeNormal, msg["content"].(string))
 		// broadcast the message
-		log.Printf("received message:%v", sendMsg)
+		// log.Printf("received message:%v", sendMsg)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
