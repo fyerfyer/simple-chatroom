@@ -9,68 +9,65 @@ import (
 	"os"
 	"time"
 
+	"github.com/fyerfyer/chatroom/pkg/setting"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
 
-var serverURL = "ws://localhost:8000/ws?"
 var clientname string
+var serverURL = "ws://localhost" + fmt.Sprintf(":"+setting.HTTPPort) + "/ws?name="
 
 func main() {
-	// Command line flag for client name
 	flag.StringVar(&clientname, "name", "Alice", "the chatroom login name")
 	flag.Parse()
 
-	// Connect to WebSocket server
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, serverURL+"name="+clientname, nil)
+	conn, _, err := websocket.Dial(ctx, serverURL+clientname, nil)
 	if err != nil {
-		log.Fatal("Failed to set up client:", err)
+		log.Fatalf("Failed to connect to WebSocket server: %v", err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "client exit")
+	defer conn.Close(websocket.StatusNormalClosure, "client closed")
 
-	// Message reader
-	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Connected to the server. Type messages to send")
 
-	for {
-		fmt.Println("Enter message (or 'exit' to quit): ")
-		input, _ := reader.ReadString('\n')
-		input = input[:len(input)-1]
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Receiver goroutine exiting...")
+				return
+			default:
+				var msg interface{}
+				err := wsjson.Read(ctx, conn, &msg)
+				if err != nil {
+					log.Printf("Error reading message: %v", err)
+					cancel()
+					return
+				}
+				fmt.Printf("Received: %v\n", msg)
+			}
+		}
+	}()
 
-		if input == "exit" {
-			sendMessage(conn, "exit", false) // Exit message
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		text := scanner.Text()
+		if text == "exit" {
+			fmt.Println("Exiting...")
+			cancel()
 			break
 		}
 
-		sendMessage(conn, input, true) // Regular message
-	}
-}
-
-func sendMessage(conn *websocket.Conn, content string, isNew bool) {
-	msg := map[string]interface{}{
-		"id":         1,
-		"name":       clientname,
-		"created_at": time.Now(),
-		"IsNew":      isNew,
-		"content":    content,
+		err := wsjson.Write(ctx, conn, text)
+		if err != nil {
+			log.Printf("Error sending message: %v", err)
+			cancel()
+			break
+		}
 	}
 
-	// Send the message
-	msgCtx, msgCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer msgCancel()
-
-	if err := wsjson.Write(msgCtx, conn, msg); err != nil {
-		log.Println("Failed to send message:", err)
-		return
-	}
-
-	// Receive the response
-	var reply map[string]interface{}
-	if err := wsjson.Read(msgCtx, conn, &reply); err != nil {
-		log.Println("Failed to receive message:", err)
-	} else {
-		log.Println("Received message:", reply)
-	}
+	time.Sleep(1 * time.Second)
+	log.Println("Client stopped.")
 }
