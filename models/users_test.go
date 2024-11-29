@@ -1,4 +1,4 @@
-package modeltest
+package models
 
 import (
 	"context"
@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fyerfyer/chatroom/models"
 	"github.com/gin-gonic/gin"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
 
 func init() {
-	go models.StartTest()
+	go Broadcaster.Start()
 	time.Sleep(50 * time.Millisecond)
 }
 
@@ -31,8 +30,8 @@ func TestSendMessage(t *testing.T) {
 
 		defer conn.Close(websocket.StatusInternalError, "connection closed")
 
-		user := models.NewUser(conn, "testing_user", "127.0.0.1")
-		user.MessageChannel <- models.NewMessage(user, models.MsgTypeNormal, wantedMsg)
+		user := NewUser(conn, "testing_user", "127.0.0.1")
+		user.MessageChannel <- NewMessage(user, MsgTypeNormal, wantedMsg)
 		user.SendMessage(c)
 		close(user.MessageChannel)
 	})
@@ -45,7 +44,8 @@ func TestSendMessage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, "ws://"+server.Listener.Addr().String()+"/ws", nil)
+	url := "ws://" + server.Listener.Addr().String() + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSendMessage(t *testing.T) {
 
 func TestFetchMessage(t *testing.T) {
 	wantedMsg := "Hello from client!"
-	user := &models.User{}
+	user := &User{}
 
 	r := gin.Default()
 	r.GET("/ws", func(c *gin.Context) {
@@ -77,9 +77,9 @@ func TestFetchMessage(t *testing.T) {
 			t.Fatalf("failed to accept websocket connection: %v", err)
 		}
 		defer conn.Close(websocket.StatusInternalError, "connection closed")
-		user = models.NewUser(conn, "testing_user", "127.0.0.1")
-		models.LoginUserWithoutSendingMessage(user)
-		user.FetchMessageForTesting(c)
+		user = NewUser(conn, "testing_user", "127.0.0.1")
+		loginUserWithoutSendingMessage(user)
+		user.FetchMessage(c)
 	})
 
 	server := httptest.NewServer(r)
@@ -88,7 +88,8 @@ func TestFetchMessage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, "ws://"+server.Listener.Addr().String()+"/ws", nil)
+	url := "ws://" + server.Listener.Addr().String() + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
@@ -98,7 +99,7 @@ func TestFetchMessage(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		wsjson.Write(ctx, conn, models.NewMessage(user, models.MsgTypeNormal, wantedMsg))
+		wsjson.Write(ctx, conn, NewMessage(user, MsgTypeNormal, wantedMsg))
 	}()
 
 	// Wait for the message to be sent before checking the channel
@@ -117,7 +118,7 @@ func TestFetchMessage(t *testing.T) {
 }
 
 func TestUserMethodInteraction(t *testing.T) {
-	user := &models.User{}
+	user := &User{}
 	wantedMsg := "Hello from testing_user!"
 
 	r := gin.Default()
@@ -129,17 +130,17 @@ func TestUserMethodInteraction(t *testing.T) {
 
 		defer conn.Close(websocket.StatusInternalError, "connection closed")
 
-		user = models.NewUser(conn, "testing_user", "127.0.0.1")
+		user = NewUser(conn, "testing_user", "127.0.0.1")
 
 		// use usermethod to send and fetch message
-		msg := models.NewMessage(user, models.MsgTypeNormal, wantedMsg)
+		msg := NewMessage(user, MsgTypeNormal, wantedMsg)
 
 		go func() {
 			user.MessageChannel <- msg
 			user.SendMessage(c)
 		}()
-		models.LoginUserWithoutSendingMessage(user)
-		user.FetchMessageForTesting(c)
+		loginUserWithoutSendingMessage(user)
+		user.FetchMessage(c)
 
 		defer user.CloseChannel()
 	})
@@ -150,7 +151,8 @@ func TestUserMethodInteraction(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, "ws://"+server.Listener.Addr().String()+"/ws", nil)
+	url := "ws://" + server.Listener.Addr().String() + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
@@ -169,7 +171,7 @@ func TestUserMethodInteraction(t *testing.T) {
 }
 
 func TestUserConcurrency(t *testing.T) {
-	user := &models.User{}
+	user := &User{}
 	sentMsg := "send message to"
 
 	r := gin.Default()
@@ -179,15 +181,15 @@ func TestUserConcurrency(t *testing.T) {
 			t.Fatalf("failed to accept websocket connection: %v", err)
 		}
 
-		user = models.NewUser(conn, "testing_user", "127.0.0.1")
-		models.LoginUserWithoutSendingMessage(user)
+		user = NewUser(conn, "testing_user", "127.0.0.1")
+		loginUserWithoutSendingMessage(user)
 
 		go func() {
 			user.SendMessage(c)
 		}()
 
 		go func() {
-			if err := user.FetchMessageForTesting(c); err != nil {
+			if err := user.FetchMessage(c); err != nil {
 				t.Errorf("failed to fetch message: %v", err)
 				return
 			}
@@ -200,7 +202,8 @@ func TestUserConcurrency(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.Dial(ctx, "ws://"+server.Listener.Addr().String()+"/ws", nil)
+	url := "ws://" + server.Listener.Addr().String() + "/ws"
+	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
@@ -213,7 +216,7 @@ func TestUserConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			msg := models.NewMessage(user, models.MsgTypeNormal, sentMsg+strconv.Itoa(i))
+			msg := NewMessage(user, MsgTypeNormal, sentMsg+strconv.Itoa(i))
 			if err := wsjson.Write(ctx, conn, msg); err != nil {
 				t.Errorf("Failed to write JSON data: %v", err)
 				return

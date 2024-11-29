@@ -1,21 +1,26 @@
-package modeltest
+package models
 
 import (
-	"log"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/fyerfyer/chatroom/models"
 )
 
+func clearUserListForTesting() {
+	Broadcaster.users = make(map[string]*User)
+}
+
+func loginUserWithoutSendingMessage(user *User) {
+	Broadcaster.users[user.Name] = user
+}
+
 func init() {
-	go models.StartTest()
+	go Broadcaster.Start()
 	time.Sleep(50 * time.Millisecond)
 }
 
-func hasUser(users []*models.User, user *models.User) bool {
+func hasUser(users []*User, user *User) bool {
 	for _, u := range users {
 		if u.Name == user.Name {
 			return true
@@ -26,44 +31,43 @@ func hasUser(users []*models.User, user *models.User) bool {
 }
 
 func TestBroadcastUserLogin(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	user := &models.User{
+	user := &User{
 		Name: "testing_user1",
 	}
-	models.TestBroadcaster.UserLogin(user)
-	usersList := models.UserListForTesting()
-	log.Println(len(usersList))
-	if _, exist := usersList[user.Name]; !exist {
+
+	Broadcaster.UserLogin(user)
+	if _, exist := Broadcaster.users[user.Name]; !exist {
 		t.Errorf("user %v should be in the map after login", user.Name)
 	}
 
 }
 
 func TestBroadcateUserLogout(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	user := &models.User{
+	user := &User{
 		Name:           "testing_user2",
-		MessageChannel: make(chan *models.Message),
+		MessageChannel: make(chan *Message),
 	}
-	models.TestBroadcaster.UserLogin(user)
-	models.TestBroadcaster.UserLogout(user)
-	usersList := models.UserListForTesting()
-	if _, exist := usersList[user.Name]; exist {
+
+	Broadcaster.UserLogin(user)
+	Broadcaster.UserLogout(user)
+	if _, exist := Broadcaster.users[user.Name]; exist {
 		t.Errorf("user %v should not be in the map after logout", user.Name)
 	}
 }
 
 func TestCheckUserCanLogin(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	user := &models.User{
+	user := &User{
 		Name: "testing_user3",
 	}
-	models.TestBroadcaster.UserLogin(user)
-	canlogin := models.TestBroadcaster.CheckUserCanLogin("user4")
-	cannotlogin := models.TestBroadcaster.CheckUserCanLogin(user.Name)
+	Broadcaster.UserLogin(user)
+	canlogin := Broadcaster.CheckUserCanLogin("user4")
+	cannotlogin := Broadcaster.CheckUserCanLogin(user.Name)
 	if !canlogin {
 		t.Errorf("new user should be allowed to login")
 	}
@@ -74,20 +78,20 @@ func TestCheckUserCanLogin(t *testing.T) {
 }
 
 func TestGetUserList(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	var users []*models.User
+	var users []*User
 	for i := 0; i < 4; i++ {
-		user := &models.User{
+		user := &User{
 			Name:           "testing_user" + strconv.Itoa(i),
-			MessageChannel: make(chan *models.Message),
+			MessageChannel: make(chan *Message),
 		}
 
-		models.TestBroadcaster.UserLogin(user)
+		Broadcaster.UserLogin(user)
 		users = append(users, user)
 	}
 
-	usersList := models.TestBroadcaster.GetUserList()
+	usersList := Broadcaster.GetUserList()
 	if len(usersList) != 4 {
 		t.Error("there should be 4 users in the user list")
 	}
@@ -99,20 +103,20 @@ func TestGetUserList(t *testing.T) {
 }
 
 func TestBroadcastMessage(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	var users []*models.User
+	var users []*User
 	for i := 0; i < 4; i++ {
-		user := &models.User{
+		user := &User{
 			ID:             i,
 			Name:           "testing_user" + strconv.Itoa(i),
-			MessageChannel: make(chan *models.Message, 32),
+			MessageChannel: make(chan *Message, 32),
 		}
 		users = append(users, user)
-		models.LoginUserWithoutSendingMessage(user)
+		loginUserWithoutSendingMessage(user)
 	}
 
-	go models.TestBroadcaster.Broadcast(models.NewWelcomeMsg(users[0]))
+	go Broadcaster.Broadcast(NewWelcomeMsg(users[0]))
 	time.Sleep(50 * time.Millisecond)
 
 	for i := 1; i < 4; i++ {
@@ -127,26 +131,26 @@ func TestBroadcastMessage(t *testing.T) {
 }
 
 func TestLoginBroadcast(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	var users []*models.User
+	var users []*User
 	for i := 0; i < 3; i++ {
-		user := &models.User{
+		user := &User{
 			ID:             i,
 			Name:           "testing_user" + strconv.Itoa(i),
-			MessageChannel: make(chan *models.Message, 32),
+			MessageChannel: make(chan *Message, 32),
 		}
 		users = append(users, user)
-		models.LoginUserWithoutSendingMessage(user)
+		loginUserWithoutSendingMessage(user)
 	}
 
-	user := &models.User{
+	user := &User{
 		ID:             3,
 		Name:           "testing_user3",
-		MessageChannel: make(chan *models.Message, 32),
+		MessageChannel: make(chan *Message, 32),
 	}
 
-	go models.TestBroadcaster.UserLogin(user)
+	go Broadcaster.UserLogin(user)
 	time.Sleep(50 * time.Millisecond)
 
 	for i := 0; i < 3; i++ {
@@ -156,7 +160,7 @@ func TestLoginBroadcast(t *testing.T) {
 		} else {
 			for len(users[i].MessageChannel) > 0 {
 				msg := <-users[i].MessageChannel
-				if msg.Type != models.MsgTypeUserLogin {
+				if msg.Type != MsgTypeUserLogin {
 					t.Error("the type of login message should be UserLogin")
 					return
 				} else {
@@ -168,20 +172,20 @@ func TestLoginBroadcast(t *testing.T) {
 }
 
 func TestLogoutBroadcast(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 
-	var users []*models.User
+	var users []*User
 	for i := 0; i < 4; i++ {
-		user := &models.User{
+		user := &User{
 			ID:             i,
 			Name:           "testing_user" + strconv.Itoa(i),
-			MessageChannel: make(chan *models.Message, 32),
+			MessageChannel: make(chan *Message, 32),
 		}
 		users = append(users, user)
-		models.LoginUserWithoutSendingMessage(user)
+		loginUserWithoutSendingMessage(user)
 	}
 
-	go models.TestBroadcaster.UserLogout(users[3])
+	go Broadcaster.UserLogout(users[3])
 	time.Sleep(50 * time.Millisecond)
 
 	for i := 0; i < 3; i++ {
@@ -191,7 +195,7 @@ func TestLogoutBroadcast(t *testing.T) {
 		} else {
 			for len(users[i].MessageChannel) > 0 {
 				msg := <-users[i].MessageChannel
-				if msg.Type != models.MsgTypeUserLogout {
+				if msg.Type != MsgTypeUserLogout {
 					t.Error("the type of logout message should be UserLogout")
 					return
 				} else {
@@ -203,7 +207,7 @@ func TestLogoutBroadcast(t *testing.T) {
 }
 
 func TestLoginConcurrency(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 	var wg sync.WaitGroup
 	var boolCheck = make(map[bool]int)
 
@@ -211,14 +215,14 @@ func TestLoginConcurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(name string) {
 			defer wg.Done()
-			user := &models.User{
+			user := &User{
 				Name:           name,
-				MessageChannel: make(chan *models.Message, 32),
+				MessageChannel: make(chan *Message, 32),
 			}
 
 			var boolValue bool
-			if boolValue = models.TestBroadcaster.CheckUserCanLogin(name); boolValue {
-				models.TestBroadcaster.UserLogin(user)
+			if boolValue = Broadcaster.CheckUserCanLogin(name); boolValue {
+				Broadcaster.UserLogin(user)
 				t.Log("successfully log in!")
 			}
 
@@ -240,10 +244,10 @@ func TestLoginConcurrency(t *testing.T) {
 }
 
 func TestLogoutConcurrency(t *testing.T) {
-	defer models.ClearUserListForTesting()
+	defer clearUserListForTesting()
 	var wg sync.WaitGroup
 	var boolCheck = make(map[bool]int)
-	models.LoginUserWithoutSendingMessage(&models.User{Name: "testing_user0", MessageChannel: make(chan *models.Message)})
+	loginUserWithoutSendingMessage(&User{Name: "testing_user0", MessageChannel: make(chan *Message)})
 
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
@@ -251,8 +255,8 @@ func TestLogoutConcurrency(t *testing.T) {
 			defer wg.Done()
 
 			var boolValue bool
-			if boolValue = models.TestBroadcaster.CheckUserCanLogout(name); boolValue {
-				models.TestBroadcaster.UserLogout(&models.User{Name: name, MessageChannel: make(chan *models.Message)})
+			if boolValue = Broadcaster.CheckUserCanLogout(name); boolValue {
+				Broadcaster.UserLogout(&User{Name: name, MessageChannel: make(chan *Message)})
 				t.Log("successfully log out!")
 			}
 

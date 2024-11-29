@@ -33,12 +33,6 @@ var Broadcaster = &broadcast{
 	messageChannel: make(chan *Message, setting.MessageQueueLength),
 }
 
-var TestBroadcaster = &broadcast{
-	users:          make(map[string]*User),
-	ops:            make(chan broadcastOp),
-	messageChannel: make(chan *Message, setting.MessageQueueLength),
-}
-
 func (b *broadcast) Start() {
 	for {
 		select {
@@ -123,32 +117,4 @@ func (b *broadcast) Broadcast(msg *Message) {
 		// log.Println("broadcast successfully!")
 		b.messageChannel <- msg
 	}
-}
-
-func StartTest() {
-	TestBroadcaster.Start()
-}
-
-func UserListForTesting() map[string]*User {
-	return TestBroadcaster.users
-}
-
-func ClearUserListForTesting() {
-	TestBroadcaster.users = make(map[string]*User)
-}
-
-func LoginUserWithoutSendingMessage(user *User) {
-	// log.Printf("Loginuser:%v", user.Name)
-	TestBroadcaster.users[user.Name] = user
-}
-
-func GetMessageChannelLengthForTesting() int {
-	return len(TestBroadcaster.messageChannel)
-}
-
-func GetMessageInChannelForTesting() *Message {
-	if GetMessageChannelLengthForTesting() == 0 {
-		return nil
-	}
-	return <-TestBroadcaster.messageChannel
 }

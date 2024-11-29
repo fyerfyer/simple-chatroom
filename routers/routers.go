@@ -14,10 +14,10 @@ func InitRouter() *gin.Engine {
 	go models.Broadcaster.Start()
 	r.GET("/user_list", api.UserListHandler)
 	r.GET("/ws", api.WebSocketHandler)
-	r.GET("/users", func(c *gin.Context) {
-		users := models.Broadcaster.GetUserList()
-		c.JSON(200, users)
-	})
+	// r.GET("/users", func(c *gin.Context) {
+	// 	users := models.Broadcaster.GetUserList()
+	// 	c.JSON(200, users)
+	// })
 
 	return r
 }

@@ -3,7 +3,6 @@ package models
 import (
 	"errors"
 	"io"
-	// "log"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -89,38 +88,6 @@ func (u *User) FetchMessage(c *gin.Context) error {
 			defer wg.Done()
 			Broadcaster.Broadcast(sendMsg)
 		}()
-		wg.Wait()
-	}
-}
-
-func (u *User) FetchMessageForTesting(c *gin.Context) error {
-	var msg map[string]interface{}
-
-	for {
-		err := wsjson.Read(c, u.conn, &msg)
-		if err != nil {
-			var closeErr websocket.CloseError
-			switch {
-			case errors.As(err, &closeErr):
-				return nil
-			case errors.Is(err, io.EOF):
-				return nil
-			default:
-				return err
-			}
-		}
-
-		// send the message to the chatroom
-		sendMsg := NewMessage(u, MsgTypeNormal, msg["content"].(string))
-		// broadcast the message
-		// log.Printf("received message:%v", sendMsg)
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			TestBroadcaster.Broadcast(sendMsg)
-		}()
-
 		wg.Wait()
 	}
 }

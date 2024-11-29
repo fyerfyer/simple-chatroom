@@ -16,8 +16,6 @@ type userMessageProcessor struct {
 
 var UserMessageProcessor = newUserMessageProcessor()
 
-var TestUserMessageProcessor = newUserMessageProcessor()
-
 func newUserMessageProcessor() *userMessageProcessor {
 	return &userMessageProcessor{
 		maxMsgNum:      setting.OfflineMsgNum,
@@ -76,17 +74,4 @@ func (p *userMessageProcessor) Send(user *User) {
 
 		delete(p.userMsgDeque, user.Name)
 	}
-}
-
-func GetRecentMsgQueueForTesting() *list.List {
-	return TestUserMessageProcessor.recentMsgDeque
-}
-
-func GetUserMsgQueueForTesting() map[string]*list.List {
-	return TestUserMessageProcessor.userMsgDeque
-}
-
-func ClearUserMsgProcessorForTesting() {
-	TestUserMessageProcessor.recentMsgDeque = list.New()
-	TestUserMessageProcessor.userMsgDeque = make(map[string]*list.List)
 }

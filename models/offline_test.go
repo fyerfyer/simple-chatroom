@@ -1,50 +1,54 @@
-package modeltest
+package models
 
 import (
+	"container/list"
 	"strconv"
 	"testing"
-
-	"github.com/fyerfyer/chatroom/models"
 )
 
-func TestOfflineSave(t *testing.T) {
-	defer models.ClearUserMsgProcessorForTesting()
+func ClearUserMsgProcessorForTesting() {
+	UserMessageProcessor.recentMsgDeque = list.New()
+	UserMessageProcessor.userMsgDeque = make(map[string]*list.List)
+}
 
-	var msgs []*models.Message
+func TestOfflineSave(t *testing.T) {
+	defer ClearUserMsgProcessorForTesting()
+
+	var msgs []*Message
 	wantedMsg := "testing message:"
-	user := &models.User{Name: "testing_user1"}
-	atUser := &models.User{Name: "testing_user2"}
+	user := &User{Name: "testing_user1"}
+	atUser := &User{Name: "testing_user2"}
 
 	for i := 0; i < 11; i++ {
-		msg := models.NewMessage(user, models.MsgTypeNormal, wantedMsg+strconv.Itoa(i))
+		msg := NewMessage(user, MsgTypeNormal, wantedMsg+strconv.Itoa(i))
 		msg.Ats = append(msg.Ats, "@"+atUser.Name)
 		msgs = append(msgs, msg)
 	}
 
 	// test normal save
-	models.TestUserMessageProcessor.Save(msgs[0])
-	msg, _ := models.GetRecentMsgQueueForTesting().Front().Value.(*models.Message)
+	UserMessageProcessor.Save(msgs[0])
+	msg, _ := UserMessageProcessor.recentMsgDeque.Front().Value.(*Message)
 	if msg.Content != msgs[0].Content {
 		t.Errorf("wanted message %v in recentMsgQueue, but got %v", msg.Content, msgs[0].Content)
 		return
 	}
-	if models.GetUserMsgQueueForTesting()[atUser.Name].Len() == 0 {
+	if UserMessageProcessor.userMsgDeque[atUser.Name].Len() == 0 {
 		t.Error("@user's message should be saved in UserMsgQueue")
 		return
 	}
 
 	// test message pop
 	for i := 1; i < 11; i++ {
-		models.TestUserMessageProcessor.Save(msgs[i])
+		UserMessageProcessor.Save(msgs[i])
 	}
 
-	msg, _ = models.GetRecentMsgQueueForTesting().Front().Value.(*models.Message)
+	msg, _ = UserMessageProcessor.recentMsgDeque.Front().Value.(*Message)
 	if msg.Content == msgs[0].Content {
 		t.Error("the first message should be popped")
 		return
 	}
 
-	if models.GetRecentMsgQueueForTesting().Len() != 10 {
+	if UserMessageProcessor.recentMsgDeque.Len() != 10 {
 		t.Error("recent msg queue should contain 10 messages")
 		return
 	}
@@ -52,37 +56,37 @@ func TestOfflineSave(t *testing.T) {
 
 func TestOfflineSend(t *testing.T) {
 	// create an online user & an offline user
-	userOnline := &models.User{
+	userOnline := &User{
 		Name:           "testing_user_online",
-		MessageChannel: make(chan *models.Message, 32),
+		MessageChannel: make(chan *Message, 32),
 		IsOnline:       true,
 	}
 
-	userOffline := &models.User{
+	userOffline := &User{
 		Name:           "testing_user_offline",
-		MessageChannel: make(chan *models.Message, 32),
+		MessageChannel: make(chan *Message, 32),
 		IsOnline:       false,
 	}
 
 	wantedMsg := "testing message:"
 	for i := 0; i < 3; i++ {
-		msg := models.NewMessage(userOnline, models.MsgTypeNormal, wantedMsg+strconv.Itoa(i))
+		msg := NewMessage(userOnline, MsgTypeNormal, wantedMsg+strconv.Itoa(i))
 		msg.Ats = append(msg.Ats, "@"+userOnline.Name)
 		msg.Ats = append(msg.Ats, "@"+userOffline.Name)
-		models.TestUserMessageProcessor.Save(msg)
+		UserMessageProcessor.Save(msg)
 	}
 
 	// t.Log(models.GetUserMsgQueueForTesting()[userOnline.Name].Len())
 
-	models.TestUserMessageProcessor.Send(userOnline)
-	models.TestUserMessageProcessor.Send(userOffline)
+	UserMessageProcessor.Send(userOnline)
+	UserMessageProcessor.Send(userOffline)
 
-	if len(models.GetUserMsgQueueForTesting()) > 1 {
+	if len(UserMessageProcessor.userMsgDeque) > 1 {
 		t.Error("after sending, UserMsgQueue for online user should be deleted")
 		return
 	}
 
-	if models.GetUserMsgQueueForTesting()[userOffline.Name].Len() != 3 {
+	if UserMessageProcessor.userMsgDeque[userOffline.Name].Len() != 3 {
 		t.Error("after sending, messages should be in offline user's channel")
 		return
 	}
